@@ -5,7 +5,10 @@ endif ()
 
 include_directories(/usr/local/include)
 
+#find_package(libevent REQUIRED)
+#add_executable(server main.c)
+#target_link_libraries(server PRIVATE event_static event_core_static event_extra_static event_openssl_static)
 
 find_package(Libevent CONFIG REQUIRED)
 add_executable(server main.c)
-target_link_libraries(server PRIVATE event_static event_core_static event_extra_static event_openssl_static)
+target_link_libraries(server PRIVATE event_static event_core_static event_extra_static event_pthreads_static)
