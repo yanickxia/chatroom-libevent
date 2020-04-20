@@ -13,3 +13,4 @@ CTestTestfile.cmake
 _deps
 .idea
 *.cbp
+server_cpp/server_cpp
