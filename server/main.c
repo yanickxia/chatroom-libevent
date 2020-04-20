@@ -6,11 +6,14 @@
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <signal.h>
+
 
 #ifndef _WIN32
 
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 # ifdef _XOPEN_SOURCE_EXTENDED
 #  include <arpa/inet.h>
@@ -25,8 +28,9 @@
 #include <event2/listener.h>
 #include <event2/util.h>
 #include <event2/event.h>
+#include "map.h"
 
-static const char MESSAGE[] = "Hello, World!\n";
+static const char MESSAGE[] = "Welcome...\n";
 
 static const int PORT = 9995;
 
@@ -37,14 +41,21 @@ static void conn_writecb(struct bufferevent *, void *);
 
 static void conn_eventcb(struct bufferevent *, short, void *);
 
+static void conn_readcb(struct bufferevent *, void *);
+
 static void signal_cb(evutil_socket_t, short, void *);
+
+static void broadcast(char *,void *);
+
+typedef struct user_data {
+    int32_t ip;
+} *ud;
 
 
 int main(int argc, char **argv) {
 
     // set out buffer clear
     setbuf(stdout, NULL);
-
 
     struct event_base *base;
     struct evconnlistener *listener;
@@ -111,19 +122,50 @@ listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
         event_base_loopbreak(base);
         return;
     }
-    bufferevent_setcb(bev, NULL, conn_writecb, conn_eventcb, NULL);
-    bufferevent_enable(bev, EV_WRITE);
-    bufferevent_disable(bev, EV_READ);
+
+    struct in_addr addr = (((struct sockaddr_in *) sa))->sin_addr;
+
+    fprintf(stdout, "get connection from %s\n", inet_ntoa(addr));
+
+    ud ud = malloc(sizeof(struct user_data));
+
+    bufferevent_setcb(bev, conn_readcb, conn_writecb, conn_eventcb, ud);
+    bufferevent_enable(bev, EV_WRITE | EV_READ);
+//    bufferevent_disable(bev, EV_READ);
 
     bufferevent_write(bev, MESSAGE, strlen(MESSAGE));
+
+    Client client = (struct client *) malloc(sizeof(struct client));
+    client->bev = bev;
+    client->ip = addr.s_addr;
+    add(client);
+
+    ud->ip = addr.s_addr;
 }
+
+static void
+conn_readcb(struct bufferevent *bev, void *user_data) {
+    uint8_t data[8192];
+    size_t n;
+
+    for (;;) {
+        n = bufferevent_read(bev, data, sizeof(data));
+//        fprintf(stdout, "message: %s", &data);
+        bufferevent_write(bev, &data, n);
+        if (n <= 0) {
+            break;
+        }
+    }
+
+}
+
 
 static void
 conn_writecb(struct bufferevent *bev, void *user_data) {
     struct evbuffer *output = bufferevent_get_output(bev);
     if (evbuffer_get_length(output) == 0) {
-        printf("flushed answer\n");
-        bufferevent_free(bev);
+//        printf("flushed answer\n");
+        ///bufferevent_free(bev);
     }
 }
 
@@ -137,7 +179,11 @@ conn_eventcb(struct bufferevent *bev, short events, void *user_data) {
     }
     /* None of the other events can happen here, since we haven't enabled
      * timeouts */
+    ud ud = user_data;
     bufferevent_free(bev);
+    Client c = rem(ud->ip);
+    free(ud);
+    free(c);
 }
 
 static void
@@ -148,4 +194,11 @@ signal_cb(evutil_socket_t sig, short events, void *user_data) {
     printf("Caught an interrupt signal; exiting cleanly in two seconds.\n");
 
     event_base_loopexit(base, &delay);
+}
+
+
+static void broadcast(char *msg,void *user_data){
+    for (int i = 0; i< MAX_CLIENTS; ++i){
+
+    }
 }
